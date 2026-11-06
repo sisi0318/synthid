@@ -1,0 +1,5 @@
+{
+  "refresh_token": "AMf-vBw...YOUR_FIREBASE_REFRESH_TOKEN",
+  "push_filename": "users/YOUR_USER_ID/files/00000000-0000-4000-8000-000000000000",
+  "bg_token": "!sLOls9f...YOUR_BOTGUARD_SNAPSHOT_TOKEN"
+}

@@ -1,0 +1,24 @@
+# Account credentials & local config (NEVER commit real tokens)
+config.json
+*.har
+.env
+.env.*
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+build/
+dist/
+*.egg-info/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
