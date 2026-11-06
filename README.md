@@ -44,26 +44,81 @@ Google DeepMind **SynthID Detector**（`https://synthid.com/`）的独立 Python
        };
      });
      if (!user) return console.error("未检测到登录状态，请先登录！");
-     console.log("已读取账号:", user.email || user.uid, "-> 请在页面上随便上传一张图触发一次检测...");
+
+     let pushFilename = "", bgToken = "", lastBgToken = "";
+     const tryOutput = () => {
+       if (!pushFilename || !bgToken || bgToken === lastBgToken) return;
+       lastBgToken = bgToken;
+       const cfg = JSON.stringify({
+         refresh_token: user.stsTokenManager.refreshToken,
+         push_filename: pushFilename,
+         bg_token: bgToken
+       }, null, 2);
+       console.log("%c====== 提取成功！请复制以下 JSON 保存为 config.json ======\n" + cfg, "color: #10b981; font-weight: bold;");
+     };
+
+     const checkHeader = (k, v) => {
+       const key = String(k).toLowerCase();
+       if (key === "push-filename" && v) {
+         pushFilename = String(v).trim();
+         console.log("[1/2] 已捕获上传路径 push_filename:", pushFilename);
+         tryOutput();
+       } else if (key === "x-goog-ext-525006476-jspb" && v) {
+         try {
+           const arr = JSON.parse(v);
+           if (typeof arr?.[5] === "string" && arr[5].startsWith("!")) {
+             bgToken = arr[5];
+             console.log("[2/2] 已捕获安全令牌 bg_token:", bgToken.slice(0, 24) + "...");
+             tryOutput();
+           }
+         } catch {}
+       }
+     };
+
+     const checkBody = (bodyStr) => {
+       if (typeof bodyStr === "string" && bodyStr.includes("TZRKo")) {
+         const m = decodeURIComponent(bodyStr).match(/users\/[^"\\&\s]+\/files\/[0-9a-f-]+/i);
+         if (m) {
+           pushFilename = m[0];
+           tryOutput();
+         }
+       }
+     };
+
+     for (const fn of ["append", "set"]) {
+       const orig = Headers.prototype[fn];
+       Headers.prototype[fn] = function(k, v) {
+         checkHeader(k, v);
+         return orig.apply(this, arguments);
+       };
+     }
 
      const origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-     const origSend = XMLHttpRequest.prototype.send;
      XMLHttpRequest.prototype.setRequestHeader = function(k, v) {
-       (this._h = this._h || {})[k.toLowerCase()] = v;
+       checkHeader(k, v);
        return origSetHeader.apply(this, arguments);
      };
+     const origSend = XMLHttpRequest.prototype.send;
      XMLHttpRequest.prototype.send = function(body) {
-       if (this._h?.["x-goog-ext-525006476-jspb"] && typeof body === "string" && body.includes("TZRKo")) {
-         const extArr = JSON.parse(this._h["x-goog-ext-525006476-jspb"]);
-         const match = decodeURIComponent(body).match(/users\/[^"\\]+\/files\/[0-9a-f-]+/i);
-         console.log("====== 请复制以下 JSON 保存为 config.json ======\n" + JSON.stringify({
-           refresh_token: user.stsTokenManager.refreshToken,
-           push_filename: match ? match[0] : "",
-           bg_token: extArr[5]
-         }, null, 2));
-       }
+       if (typeof body === "string") checkBody(body);
        return origSend.apply(this, arguments);
      };
+
+     const origFetch = window.fetch;
+     window.fetch = function(input, init) {
+       try {
+         const headers = input instanceof Request ? input.headers : init?.headers;
+         if (headers instanceof Headers) headers.forEach((v, k) => checkHeader(k, v));
+         else if (headers && typeof headers === "object") {
+           for (const [k, v] of Object.entries(headers)) checkHeader(k, v);
+         }
+         if (typeof init?.body === "string") checkBody(init.body);
+         else if (input instanceof Request) input.clone().text().then(checkBody).catch(() => {});
+       } catch {}
+       return origFetch.apply(this, arguments);
+     };
+
+     console.log("已读取账号:", user.email || user.uid, "-> 请在页面上随便上传一张图触发一次检测...");
    })();
    ```
 3. 在网页上**随便选择一张图片上传**，将控制台输出的 JSON 复制保存为 `config.json` 即可。
